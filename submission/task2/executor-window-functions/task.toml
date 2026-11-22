@@ -1,0 +1,30 @@
+schema_version = "2.0"
+artifacts = ["/app/"]
+
+[task]
+name = "matraix-takehome/executor-window-functions"
+version = "1.0.0"
+description = "Add SQL window functions (ranking, frame aggregates incl. RANGE/GROUPS/EXCLUDE, navigation, QUALIFY, named windows) to sqlglot's Python executor, efficient on 50k-row tables."
+authors = [{ name = "TODO-your-name", email = "TODO-your-email" }]
+
+[metadata]
+author_name = "TODO-your-name"
+author_email = "TODO-your-email"
+author_organization = ""
+category = "Software"
+subcategory = "Databases"
+tags = ["python", "sql", "query-engine", "window-functions", "sqlglot"]
+expert_time_estimate_hours = 6
+
+[verifier]
+timeout_sec = 900.0
+environment_mode = "separate"
+
+[agent]
+timeout_sec = 14400.0
+
+[environment]
+build_timeout_sec = 900.0
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240

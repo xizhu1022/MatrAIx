@@ -1,0 +1,7 @@
+# confidential take-home originals and build artifacts are not part of this repository
+matraix-take-home/
+*.zip
+/*.png
+.DS_Store
+__pycache__/
+*.pyc
