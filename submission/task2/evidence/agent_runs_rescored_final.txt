@@ -1,0 +1,8 @@
+The 9 saved agent solutions (final /app of each trial) re-scored through the full trial lifecycle
+under the final verifier (audit hook, parent-enforced time limits, readable /app, regression first):
+
+luna_run1 0.3   luna_run2 0.1   luna_run3 0.1
+terra_run1 0.5  terra_run2 0.9  terra_run3 0.2
+sol_run1 0.8    sol_run2 1.0    sol_run3 1.0
+
+Identical to the rewards measured during the trials.

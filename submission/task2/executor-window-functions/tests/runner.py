@@ -12,6 +12,21 @@ import sys
 
 DEFAULT_CASE_SECONDS = 10
 
+# The engine must be implemented in Python: delegating queries to another SQL engine or to
+# native code (sqlite3 ships with CPython) is blocked, as is starting other processes.
+BLOCKED_MODULES = {"sqlite3", "_sqlite3", "ctypes", "_ctypes", "duckdb", "cffi", "_cffi_backend"}
+BLOCKED_EVENTS = {
+    "ctypes.dlopen", "ctypes.dlsym", "subprocess.Popen", "os.system", "os.exec", "os.posix_spawn",
+    "os.spawn", "os.fork", "os.forkpty", "pty.spawn",
+}
+
+
+def _audit(event, args):
+    if event == "import" and args and str(args[0]).split(".")[0] in BLOCKED_MODULES:
+        raise ImportError(f"importing {args[0]} is not allowed: implement the engine in Python")
+    if event in BLOCKED_EVENTS:
+        raise PermissionError(f"{event} is not allowed in the verifier")
+
 
 def main() -> None:
     request = json.load(sys.stdin)
@@ -23,6 +38,10 @@ def main() -> None:
     import logging
 
     logging.disable(logging.WARNING)
+
+    # Audit hooks cannot be removed once installed; this one is active before any code from
+    # /app runs.
+    sys.addaudithook(_audit)
 
     # Appended, like an editable install: the standard library wins over stray files in /app
     # (e.g. a scratch `random.py`), and sqlglot can only come from /app.

@@ -1,0 +1,22 @@
+Re-scoring of 19 saved solutions under the all-or-nothing rule and two in-group thresholds (v3.1 verifier).
+
+solution               cases  all-or-nothing  >=90% -> 0.5  >=80% -> 0.5  groups below full (threshold 90%)
+oracle              312/312             1.00          1.00          1.00  -
+noop                  9/312             0.00          0.00          0.00  types_nulls(0/30), ranking(0/30), aggregates(0/30), rows_frames(0/30), range_frames(0/30), groups_exclude(0/30), navigation(0/30), composition(1/60), subqueries(8/30), scale(0/12)
+sol_v31_1           304/312             0.80          0.85          0.90  types_nulls(25/30), subqueries(27/30)½
+sol_v31_2           312/312             1.00          1.00          1.00  -
+sol_v31_3           312/312             1.00          1.00          1.00  -
+sol_v3_1            298/312             0.90          0.90          0.90  types_nulls(16/30)
+sol_v3_2            312/312             1.00          1.00          1.00  -
+sol_v3_3            294/312             0.80          0.80          0.80  types_nulls(20/30), range_frames(22/30)
+sonnet_v1           271/312             0.60          0.65          0.65  types_nulls(28/30)½, groups_exclude(13/30), subqueries(17/30), scale(3/12)
+sonnet_v2           302/312             0.90          0.90          0.90  subqueries(20/30)
+claude_strong_v1    263/312             0.60          0.60          0.65  types_nulls(26/30), groups_exclude(1/30), subqueries(20/30), scale(6/12)
+claude_strong_v2    302/312             0.90          0.90          0.90  subqueries(20/30)
+no_frames           226/312             0.30          0.35          0.40  types_nulls(25/30), rows_frames(3/30), range_frames(15/30), groups_exclude(7/30), navigation(22/30), composition(57/60)½, scale(7/12)
+no_peers            295/312             0.60          0.65          0.75  types_nulls(26/30), aggregates(23/30), composition(56/60)½, scale(10/12)
+no_qualify          296/312             0.70          0.80          0.80  composition(54/60)½, subqueries(21/30), scale(11/12)½
+no_ignore_nulls     303/312             0.80          0.80          0.85  navigation(23/30), scale(10/12)
+desc_bug            303/312             0.90          0.90          0.90  types_nulls(21/30)
+no_optimizer_fix    308/312             0.90          0.90          0.95  subqueries(26/30)
+breaks_left_join    305/312             0.00          0.00          0.00  composition(57/60)½, subqueries(26/30)  [regression FAIL -> 0]

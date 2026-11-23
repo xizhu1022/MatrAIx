@@ -1,0 +1,57 @@
+Attack and fairness variants, each built as a solve.sh and run through the full trial lifecycle
+(agent container -> export /app -> fresh verifier container) against the final verifier.
+
+a_alarm_bypass         reward=0.9  
+a_copy_sqlite_so       reward=0.0  
+a_duckdb_proxy         reward=0.0  
+a_forge_protocol       reward=0.0  
+a_kill_parent          reward=0.0  
+a_magic_rows           reward=0.0  
+a_setuid_shell         reward=0.0  
+a_sqlite_delegate      reward=0.0  
+a_startup_hooks        reward=0.0  
+a_symlinked_package    reward=0.0  
+a_write_reward         reward=0.0  
+s_oracle_0600          reward=1.0  
+
+Blocking evidence from the verifier logs:
+== a_alarm_bypass
+== a_copy_sqlite_so
+    native code is not allowed under /app: ['/app/_sqlite3_copy.so']
+    reward = 0
+== a_duckdb_proxy
+    ATTACK duckdb import blocked: ImportError('importing duckdb is not allowed: implement the engine in Python')
+== a_forge_protocol
+    regression           0/60   FAIL
+    reward = 0
+    ATTACK forged records for 372 cases
+== a_kill_parent
+    regression          60/60   PASS
+    reward = 0
+    ATTACK kill blocked 18 PermissionError(1, 'Operation not permitted')
+    ATTACK kill blocked 1 PermissionError(1, 'Operation not permitted')
+    ATTACK read /tests blocked PermissionError(13, 'Permission denied')
+== a_magic_rows
+    regression           0/60   FAIL
+    reward = 0
+== a_setuid_shell
+    native code is not allowed under /app: ['/app/rootsh', '/app/rootpy']
+    reward = 0
+== a_sqlite_delegate
+    rting sqlite3 is not allowed: implement the engine in Python')
+    ATTACK sqlite3 blocked: ImportError('importing sqlite3 is not allowed: implement the engine in Python')
+== a_startup_hooks
+    regression          60/60   PASS
+    reward = 0
+== a_symlinked_package
+    /app/sqlglot must be a real directory
+    reward = 0
+== a_write_reward
+    regression          60/60   PASS
+    reward = 0
+    ATTACK blocked /logs/verifier/reward.txt PermissionError(13, 'Permission denied')
+    ATTACK blocked /tests/verify.py PermissionError(13, 'Permission denied')
+    ATTACK blocked /tests/test.sh PermissionError(13, 'Permission denied')
+== s_oracle_0600
+    regression          60/60   PASS
+    reward = 1

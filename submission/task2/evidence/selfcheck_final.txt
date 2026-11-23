@@ -1,0 +1,86 @@
+[structure] ok
+[instruction] ok
+[verifier] ok
+[build] environment/ ok (1s)
+[build] tests/ ok (0s)
+[image] ok
+[oracle] reward=1.0 (want 1.0) total 27.2s, verifier 26.0s
+  --- solve.sh output (tail) ---
+window functions OK
+
+  --- test.sh output (tail) ---
+372 cases over 6 datasets
+tier types_nulls    30/30   PASS
+tier ranking        30/30   PASS
+tier aggregates     30/30   PASS
+tier rows_frames    30/30   PASS
+tier range_frames   30/30   PASS
+tier groups_exclude   30/30   PASS
+tier navigation     30/30   PASS
+tier composition    60/60   PASS
+tier subqueries     30/30   PASS
+tier scale          12/12   PASS
+regression          60/60   PASS
+reward = 1
+
+[oracle] reward=1.0 (want 1.0) total 27.6s, verifier 26.5s
+  --- solve.sh output (tail) ---
+window functions OK
+
+  --- test.sh output (tail) ---
+372 cases over 6 datasets
+tier types_nulls    30/30   PASS
+tier ranking        30/30   PASS
+tier aggregates     30/30   PASS
+tier rows_frames    30/30   PASS
+tier range_frames   30/30   PASS
+tier groups_exclude   30/30   PASS
+tier navigation     30/30   PASS
+tier composition    60/60   PASS
+tier subqueries     30/30   PASS
+tier scale          12/12   PASS
+regression          60/60   PASS
+reward = 1
+
+[noop] reward=0.0 (want 0.0) total 15.8s, verifier 15.1s
+  --- test.sh output (tail) ---
+invalid syntax (MAX(scope["t"]["s"]) OVER (ORDER BY ORDERED(scope["t"]["y"], True, True) GROUPS BETWEEN CURRENT ROW AND CURRENT ROW), line 1)
+    want: [[1, None]]
+FAIL [types_nulls] SELECT id, ROW_NUMBER() OVER (ORDER BY h NULLS LAST, g ASC NULLS LAST, s DESC NULLS FIRST, id NULLS FIRST) AS v FROM t
+    got:  ExecuteError: Step 'Join: t (271866447012800)' failed: invalid syntax (ROWNUMBER() OVER (ORDER BY ORDERED(scope["t"]["h"], False, False), ORDERED(scope["t"]["g"], False, False), ORDERED(scope["t"]["s"], True, True), ORDERED(scope["t"]["id"], False, True)), line 1)
+    want: [[1, 1]]
+FAIL [types_nulls] SELECT id, RANK() OVER (PARTITION BY g ORDER BY h NULLS FIRST) AS v FROM t
+    got:  ExecuteError: Step 'Aggregate: t (271866447034992)' failed: invalid syntax (RANK() OVER (PARTITION BY scope["t"]["g"] ORDER BY ORDERED(scope["t"]["h"], False, True)), line 1)
+    want: [[1, 1]]
+FAIL [types_nulls] SELECT id, DENSE_RANK() OVER (ORDER BY s DESC NULLS LAST, x DESC NULLS LAST) AS v FROM t
+    got:  ExecuteError: Step 'Aggregate: t (271866447033696)' failed: invalid syntax (DENSERANK() OVER (ORDER BY ORDERED(scope["t"]["s"], True, False), ORDERED(scope["t"]["x"], True, False)), line 1)
+    want: [[1, 1]]
+FAIL [types_nulls] SELECT id, SUM(y) OVER (PARTITION BY g, h ORDER BY g DESC NULLS FIRST) AS v FROM t
+    got:  ExecuteError: Step 'Aggregate: t (271866447020736)' failed: invalid syntax (SUM(scope["t"]["y"]) OVER (PARTITION BY scope["t"]["g"], scope["t"]["h"] ORDER BY ORDERED(scope["t"]["g"], True, True)), line 1)
+    want: [[2, 7], [1, 7], [4, 7], [3, 7]]
+FAIL [types_nulls] SELECT id, COUNT(*) OVER (ORDER BY g DESC NULLS FIRST, s NULLS LAST) AS v, MIN(id) OVER (ORDER BY x DESC NULLS FIRST) AS w FROM t
+    got:  ExecuteError: Step 'Aggregate: t (271866447019040)' failed: invalid syntax (COUNT(scope[None]["_a_0"]) OVER (ORDER BY ORDERED(scope["t"]["g"], True, True), ORDERED(scope["t"]["s"], False, False)), line 1)
+    want: [[1, 2, 1], [4, 1, 1], [3, 3, 1], [2, 4, 1]]
+
+[noop] reward=0.0 (want 0.0) total 15.6s, verifier 15.0s
+  --- test.sh output (tail) ---
+invalid syntax (MAX(scope["t"]["s"]) OVER (ORDER BY ORDERED(scope["t"]["y"], True, True) GROUPS BETWEEN CURRENT ROW AND CURRENT ROW), line 1)
+    want: [[1, None]]
+FAIL [types_nulls] SELECT id, ROW_NUMBER() OVER (ORDER BY h NULLS LAST, g ASC NULLS LAST, s DESC NULLS FIRST, id NULLS FIRST) AS v FROM t
+    got:  ExecuteError: Step 'Join: t (269144511494528)' failed: invalid syntax (ROWNUMBER() OVER (ORDER BY ORDERED(scope["t"]["h"], False, False), ORDERED(scope["t"]["g"], False, False), ORDERED(scope["t"]["s"], True, True), ORDERED(scope["t"]["id"], False, True)), line 1)
+    want: [[1, 1]]
+FAIL [types_nulls] SELECT id, RANK() OVER (PARTITION BY g ORDER BY h NULLS FIRST) AS v FROM t
+    got:  ExecuteError: Step 'Aggregate: t (269144511512352)' failed: invalid syntax (RANK() OVER (PARTITION BY scope["t"]["g"] ORDER BY ORDERED(scope["t"]["h"], False, True)), line 1)
+    want: [[1, 1]]
+FAIL [types_nulls] SELECT id, DENSE_RANK() OVER (ORDER BY s DESC NULLS LAST, x DESC NULLS LAST) AS v FROM t
+    got:  ExecuteError: Step 'Aggregate: t (269144511511680)' failed: invalid syntax (DENSERANK() OVER (ORDER BY ORDERED(scope["t"]["s"], True, False), ORDERED(scope["t"]["x"], True, False)), line 1)
+    want: [[1, 1]]
+FAIL [types_nulls] SELECT id, SUM(y) OVER (PARTITION BY g, h ORDER BY g DESC NULLS FIRST) AS v FROM t
+    got:  ExecuteError: Step 'Aggregate: t (269144511499392)' failed: invalid syntax (SUM(scope["t"]["y"]) OVER (PARTITION BY scope["t"]["g"], scope["t"]["h"] ORDER BY ORDERED(scope["t"]["g"], True, True)), line 1)
+    want: [[2, 7], [1, 7], [4, 7], [3, 7]]
+FAIL [types_nulls] SELECT id, COUNT(*) OVER (ORDER BY g DESC NULLS FIRST, s NULLS LAST) AS v, MIN(id) OVER (ORDER BY x DESC NULLS FIRST) AS w FROM t
+    got:  ExecuteError: Step 'Aggregate: t (269144511494960)' failed: invalid syntax (COUNT(scope[None]["_a_0"]) OVER (ORDER BY ORDERED(scope["t"]["g"], True, True), ORDERED(scope["t"]["s"], False, False)), line 1)
+    want: [[1, 2, 1], [4, 1, 1], [3, 3, 1], [2, 4, 1]]
+
+
+RESULT: VALID

@@ -1,0 +1,11 @@
+{
+ "model": "openai/gpt-5.6-sol",
+ "run": "v31_sol_run2",
+ "reward": 1.0,
+ "stop_reason": "finished",
+ "turns": 45,
+ "cost_usd": 1.49,
+ "minutes": 5.2,
+ "summary": "Implemented efficient SQL window-function support in the pure-Python executor. Added planner window stages with QUALIFY ordering, named-window inheritance, grouped aggregate materialization, and support through joins/subqueries/CTEs. Added executor evaluation for ranking, aggregate, navigation, ROWS/RANGE/GROUPS frames, exclusions, NULL behavior, ordering, and IGNORE NULLS using prefix structures, binary search, and segment trees. Adjusted window-query optimization to avoid unsafe subquery rewrites and preserved qualified column ranges during sorting. Validated with broad functional, composition, grouped, named-window, join, correlated-subquery, regression, and 50,000-row performance tests.",
+ "verifier_log": "372 cases over 6 datasets\ntier types_nulls    30/30   PASS\ntier ranking        30/30   PASS\ntier aggregates     30/30   PASS\ntier rows_frames    30/30   PASS\ntier range_frames   30/30   PASS\ntier groups_exclude   30/30   PASS\ntier navigation     30/30   PASS\ntier composition    60/60   PASS\ntier subqueries     30/30   PASS\ntier scale          12/12   PASS\nregression          60/60   PASS\nreward = 1\n"
+}

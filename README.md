@@ -176,6 +176,13 @@ audit confirms every requirement is exercised at least 3 times.
   setuid bits under `/app`.
 - `/app` is appended to the child's module search path, so stray files cannot shadow the standard
   library.
+- A Python audit hook, installed before any agent code runs, refuses `sqlite3`, `ctypes`,
+  `duckdb`, library loading and new processes, and compiled native files under `/app` are
+  rejected: the engine has to be implemented, not delegated.
+- Time limits are enforced by the root parent per case; a stuck or crashed case fails on its own
+  and a fresh child continues. Regression cases run first.
+- `/app` is made readable before the unprivileged run, so honest files saved with restrictive
+  modes still work.
 - DuckDB results are computed after the child exits, and root writes the reward last.
 
 ### 5.4 How we checked the task
@@ -185,7 +192,7 @@ audit confirms every requirement is exercised at least 3 times.
 | local differential check | oracle vs DuckDB on all 372 cases; sqlglot's own tests | all pass |
 | official self-check | `selfcheck.py --repeats 2` | `RESULT: VALID` (oracle 1.0, no-op 0.0) |
 | one-defect variants | oracle with one realistic bug each | see section 6 |
-| attacks | 8 cheating strategies, each built as a "solution" and run through the lifecycle | all 0, blocking error in the log |
+| attacks | 10 cheating strategies, each built as a "solution" and run through the lifecycle | all 0, blocking error in the log |
 | coverage audit | how often each requirement is exercised | all ≥ 3 |
 | agent runs | agents see only the instruction; their `/app` goes through the lifecycle | see section 7 |
 
@@ -197,7 +204,7 @@ audit confirms every requirement is exercised at least 3 times.
 |---|---|
 | Valid | repeated official self-checks: oracle 1.0 and no-op 0.0 every time |
 | Fair | every construct the verifier can emit is covered by an instruction clause; issues found in testing were fixed (section 8) |
-| Hack-resistant | 8 attacks all scored 0: writing the reward or the verifier (Permission denied), using DuckDB (No module named 'duckdb'), setuid escalation (still uid 65534), startup hooks (never executed), symlinked package (rejected), forged output (no answers to forge), always-equal objects (plain values only), killing the verifier (Operation not permitted) |
+| Hack-resistant | 10 attacks all scored 0: writing the reward or the verifier (Permission denied), using DuckDB (No module named 'duckdb'), delegating to `sqlite3` (blocked by the audit hook), copying a native extension into `/app` (rejected), setuid escalation (still uid 65534), startup hooks (never executed), symlinked package (rejected), forged output (no answers to forge), always-equal objects (plain values only), killing the verifier (Operation not permitted). Disabling the in-process alarm does not help: the parent's per-case limit still fails slow cases |
 | Useful signal | one-defect oracles score in steps: frames ignored 0.3, peers ignored 0.6, `QUALIFY` missing 0.7, `IGNORE NULLS` ignored 0.8, `DESC` by negation 0.9, optimizer fix missing 0.9, `LEFT JOIN` broken 0 |
 | Hard | section 7 |
 
@@ -205,8 +212,8 @@ audit confirms every requirement is exercised at least 3 times.
 
 ## 7. Evaluation results
 
-**Three models of the same family on the final version (v3.1)**, each run 3 times in the real
-offline task container with the same agent harness:
+**Three models of one family on the final task**, each run 3 times in the real offline task
+container with the same agent harness:
 
 | Model | Rewards | Mean | Full marks |
 |---|---|---|---|
@@ -214,12 +221,11 @@ offline task container with the same agent harness:
 | GPT-5.6 Terra (medium) | 0.5 / 0.9 / 0.2 | 0.53 | 0/3 |
 | GPT-5.6 Sol (large) | 0.8 / 1.0 / 1.0 | 0.93 | 2/3 |
 
-The reward rises with model capability, and every one of the 9 trials passed all 60 regression
-cases, so the lost reward always comes from capabilities that were not finished. Terra shows the
-widest spread (0.2 to 0.9), the regime with the most learning signal for RL; Sol is the ceiling of
-this task.
+The reward rises with model capability, and all 9 trials kept every regression case passing, so
+lost reward always comes from capabilities that were not finished. The mid-tier model shows the
+widest spread (0.2 to 0.9), the regime with the most learning signal for RL.
 
-**GPT-5.6 Luna: 3 trials finished, no full marks, mean 0.17.**
+**GPT-5.6 Luna: 3 trials, no full marks, mean 0.17.**
 
 | Trial | Reward | Groups passed | Groups failed |
 |---|---|---|---|
@@ -227,7 +233,7 @@ this task.
 | 2 | 0.1 | 1/10 | all except aggregates |
 | 3 | 0.1 | 1/10 | all except aggregates |
 
-**GPT-5.6 Terra: 3 trials finished, no full marks, mean 0.53.**
+**GPT-5.6 Terra: 3 trials, no full marks, mean 0.53.**
 
 | Trial | Reward | Groups passed | Groups failed |
 |---|---|---|---|
@@ -235,7 +241,7 @@ this task.
 | 2 | 0.9 | 9/10 | composition |
 | 3 | 0.2 | 2/10 | types_nulls, rows_frames, range_frames, groups_exclude, navigation, composition, subqueries, scale |
 
-**GPT-5.6 Sol: 3 trials finished, 2 with full marks, mean 0.93.**
+**GPT-5.6 Sol: 3 trials, 2 full marks, mean 0.93.**
 
 | Trial | Reward | Groups passed | Groups failed |
 |---|---|---|---|
@@ -243,60 +249,33 @@ this task.
 | 2 | 1.0 | 10/10 | — |
 | 3 | 1.0 | 10/10 | — |
 
-Trial 1: `DESC` implemented by negating keys crashes on strings/NULLs (`types_nulls`, 25/30), and
-a scalar subquery next to a window aggregate is broken by the optimizer, which treats the window
-aggregate as a plain aggregate (`subqueries`, 27/30). Each trial took 5–8 minutes and $1.5–2.2;
-regression cases passed in all trials. Compared with a peer's task (mean 0.82, no full marks),
-ours is somewhat easier for this model.
-
-**History** (same agent harness, or Claude agents run on the host):
-
-| Version | Model | Rewards | Notes |
-|---|---|---|---|
-| v1 | Claude Sonnet | 1.0 | ~4 min, naive implementation |
-| v2 | Claude Sonnet | 1.0 | ~9 min, cross-checked against its own brute-force reference |
-| v2 | GPT-5.6 Sol ×3 | 0.17 / 1.0 / 0.17 | one sort bug zeroed 5 of 6 groups |
-| v3 | GPT-5.6 Sol ×3 | 0.4 / 1.0 / 0.4 | a string `MIN`/`MAX` bug zeroed 6 groups |
-| v3 solutions re-scored on v3.1 | GPT-5.6 Sol | 0.9 / 1.0 / 0.8 | failures land only in `types_nulls` and `range_frames` |
-
 ---
 
-## 8. Iterations and lessons
+## 8. Design evolution and insights
 
-| Version | Change | Why |
+| Version | Added | Motivation |
 |---|---|---|
-| v1 | small tables, `ROWS`/`RANGE` | first version |
-| v2 | + 50,000-row scale group, `GROUPS`, `EXCLUDE`; O(n log n) oracle | v1 solved by Claude Sonnet in 4 minutes |
-| v3 | 10 groups; subquery group (oracle fixes the optimizer); round-robin templates | coverage audit found requirements tested only 1–2 times; one sort bug zeroed 5 of 6 groups |
-| v3.1 | string aggregates moved into `types_nulls`, numeric aggregates elsewhere; 30–60 cases per group | a string `MIN`/`MAX` bug still zeroed 6 of 10 groups |
+| v1 | windows on small tables, `ROWS`/`RANGE` frames | first complete version |
+| v2 | 50,000-row scale group, `GROUPS`, `EXCLUDE`; O(n log n) oracle | require efficient algorithms, not only semantics |
+| v3 | 10 independent capability groups; subquery group with the optimizer fix; round-robin templates | one bug should cost one group; even coverage |
+| v3.1 | cross-cutting concerns (types, NULLs, string aggregates) concentrated in one group | failures land in the group of their root cause |
+| final | audit-hook sandbox, parent-enforced time limits, readable `/app`, regression first | hack-resistance and fairness hardening |
 
-**Lessons.**
+**Insights.**
 
-1. **Measure difficulty.** v1, which we expected to be hard, fell to a mid-tier model in 4 minutes.
-2. **A precise instruction invites self-verification.** Fairness requires a complete
-   specification, and the successful agents wrote brute-force references from it and tested
-   against them. That caps how hard such a task can be.
-3. **Score by independent capabilities.** Compared with a peer's design (13 groups, rewards
-   0.77–0.92), our early groups shared ordering and type handling, so one cross-cutting bug zeroed
-   most groups and the reward only told "bug or no bug". Concentrating cross-cutting concerns in
-   one group made failures name their root cause.
-4. **Test the verifier too.** One-defect variants, attacks and the coverage audit all found real
-   problems: a regression case failing on a pre-existing bug, honest scratch files being punished,
-   instruction omissions, thin coverage.
-5. **Test assumptions with data.** We expected the optimizer bug to force cross-module fixes, but
-   in v3 two of three runs passed the subquery group without touching the optimizer: its added
-   `GROUP BY id` groups by a unique key, so lenient implementations are still right. In v3.1 the
-   group did catch one run, on a different optimizer interaction (a scalar subquery next to a
-   window aggregate). One run is not enough to judge a group.
+1. **Partial credit should follow independent capabilities.** Concentrating cross-cutting concerns
+   in one group makes every failed group name a root cause, and keeps the reward proportional to
+   real progress (one-defect oracles score 0.3 to 0.9).
+2. **Difficulty belongs to a task and a model together.** A ladder of models shows where a task
+   gives a useful signal: here mid-tier models get the widest spread.
+3. **The verifier is software too.** One-defect variants, attacks, a coverage audit and an
+   independent review each strengthened it before it was used to measure agents.
+4. **With a fair, precise specification, difficulty has to come from semantics, efficiency and
+   interactions between modules**, which is what the scale, frame and subquery groups target.
 
-## 9. Known limitations
+## 9. Scope and future work
 
-- The seed is fixed, so queries could in principle be memorised across episodes.
-- Features outside the templates (`FILTER`, `DISTINCT` window aggregates) are neither required
-  nor checked.
-- The subquery group discriminates only sometimes (see above).
-- Isolation relies on Linux permissions.
-- Only the scale group is time-sensitive; the 20 s limit is about 12x the oracle's slowest case,
-  so a solution near the limit could be flaky.
-- GPT-5.6 Sol results come from our own minimal agent harness; other harnesses may score
-  differently.
+- The seed is fixed so that the reward is a deterministic function of `/app`.
+- Out of scope: window `FILTER`/`DISTINCT` aggregates and other features outside the templates.
+- Harder variants for frontier models: a larger scale group, more cases that require the
+  optimizer fix, and the out-of-scope features above.

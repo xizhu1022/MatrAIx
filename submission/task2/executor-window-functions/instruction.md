@@ -7,6 +7,12 @@ clause is silently ignored. Implement window-function support in the executor
 (the planner in `sqlglot/planner.py` and the engine under `sqlglot/executor/` are the natural
 places; how you structure it is up to you).
 
+The engine must stay pure Python: evaluate the queries yourself rather than handing them to
+another SQL engine or to native code. The verifier runs your code with `sqlite3`, `ctypes` and
+`duckdb` imports blocked and without permission to start processes, and rejects compiled native
+files (ELF) anywhere under `/app`. It runs as an unprivileged user and reads `/app` but does not
+write to it.
+
 ## How your work is checked
 
 A hidden verifier imports `sqlglot` from `/app` and calls
@@ -17,8 +23,8 @@ sqlglot.executor.execute(sql, schema=schema, tables=tables)
 
 with tables given as lists of row dicts and an explicit `schema`, then compares `result.rows`
 with the result DuckDB returns for the same SQL text on the same data. Rows are compared as a
-multiset (row order is ignored unless you are asked for it; `ORDER BY ... LIMIT` must still
-select the right rows). Within a row, values are compared positionally in SELECT-list order;
+multiset (row order is never compared, but `ORDER BY ... LIMIT` must still select the right
+rows). Within a row, values are compared positionally in SELECT-list order;
 column names are not compared. Integers and floats are compared numerically (floats with a
 relative tolerance of 1e-9), `NULL` must be `None`, and strings must match exactly. Result
 values must be plain `None`, `bool`, `int`, `float` or `str`.
@@ -129,9 +135,9 @@ Cases are grouped into ten equally weighted groups: *types and NULLs* (ordering 
 keys, `DESC`, `NULLS FIRST`/`NULLS LAST`, string and NULL-containing keys, and `MIN`/`MAX` over
 strings), *ranking* functions, *aggregates* with default frames, *ROWS frames*, *RANGE
 frames*, *GROUPS frames and EXCLUDE*, *navigation* functions (including `IGNORE NULLS`),
-*composition*, *subqueries*, and *scale*. Outside the types-and-NULLs group, window `ORDER BY`
-keys are the never-NULL integer columns `y`, `h` and `id`, and window aggregates are over
-numbers. A group counts
+*composition*, *subqueries*, and *scale*. Outside the types-and-NULLs group, window aggregates are over
+numbers and window `ORDER BY` keys are mostly the never-NULL integer columns `y`, `h` and `id`
+(composition and subqueries also order by group keys, counts and `u.w`). A group counts
 only if **every** case in it is correct (and on time); the reward is the fraction of complete
 groups. Queries without window functions that work today (filters, `CASE`/`COALESCE`,
 grouping, joins, `DISTINCT`, subqueries, CTEs, `UNION ALL`, ordering with `LIMIT`) must keep

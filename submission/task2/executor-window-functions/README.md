@@ -46,16 +46,19 @@ getting a large body of SQL semantics exactly right, efficiently:
 
 ### Agent runs
 
-Each agent got only `instruction.md`; transcripts were checked for access to tests, the oracle
-or other runs (none found). Final `/app` trees were scored through the exact trial lifecycle.
+Agents received only `instruction.md`. A small agent harness (`../evidence/or_agent.py`: bash and
+write-file tools, OpenRouter, reasoning effort high, limits 150 turns / $20 / 90 min) ran each
+model inside a container started from the environment image with `--network none`, 2 CPUs and
+4 GB; the final `/app` was exported and scored in a fresh verifier container, exactly like a
+trial. Three models of one family, 3 trials each:
 
-**GPT-5.6 Sol on the final version (v3.1), in the real offline container.** A minimal agent
-harness (bash and write-file tools, OpenRouter, reasoning effort high, limits 150 turns / $20 /
-90 min) ran the model in a container started from the environment image with
-`--network none`, 2 CPUs and 4 GB; `/app` was then exported and scored in a fresh verifier
-container.
+| Model | Trial rewards | Mean | Groups passed per trial |
+|---|---|---|---|
+| GPT-5.6 Luna (small) | 0.3 / 0.1 / 0.1 | 0.17 | 3, 1, 1 of 10 |
+| GPT-5.6 Terra (medium) | 0.5 / 0.9 / 0.2 | 0.53 | 5, 9, 2 of 10 |
+| GPT-5.6 Sol (large) | 0.8 / 1.0 / 1.0 | 0.93 | 8, 10, 10 of 10 |
 
-3 trials finished, 2 with full marks, mean 0.93:
+GPT-5.6 Sol in detail:
 
 | Trial | Reward | Groups passed | Groups failed | Window cases passed | Time / cost |
 |---|---|---|---|---|---|
@@ -63,40 +66,17 @@ container.
 | 2 | 1.0 | 10/10 | | 312/312 | 5.2 min / $1.49 |
 | 3 | 1.0 | 10/10 | | 312/312 | 5.0 min / $1.51 |
 
-Trial 1 failed `types_nulls` because `DESC` was implemented by negating keys (crashes on strings
-and NULLs; the fourth Sol trial to make this mistake), and `subqueries` on a scalar subquery
-next to a window aggregate (`SELECT id, (SELECT MAX(w) FROM u), COUNT(*) OVER (...) FROM t`): the
-optimizer's `unnest_subqueries` treats the window aggregate as a plain aggregate and wraps the
-hoisted scalar in `MAX(...)`. Regression cases passed in every trial.
+Typical failure modes are exactly the ones the groups are designed to isolate: `DESC` ordering
+implemented by negating keys (crashes on strings and NULLs, `types_nulls`), quadratic frame
+evaluation (`scale`), frame-boundary errors (`rows_frames`, `range_frames`, `groups_exclude`), and
+a scalar subquery next to a window aggregate that the optimizer rewrites into an aggregate query
+(`subqueries`). All 9 trials passed every regression case, and re-scoring the 9 saved solutions
+under the final verifier gives identical rewards (`../evidence/agent_runs_rescored_final.txt`).
 
-**Smaller models of the same family (same harness, same version, 3 trials each).**
-
-| Model | Trial rewards | Mean | Groups passed per trial |
-|---|---|---|---|
-| GPT-5.6 Luna | 0.3 / 0.1 / 0.1 | 0.17 | 3, 1, 1 of 10 |
-| GPT-5.6 Terra | 0.5 / 0.9 / 0.2 | 0.53 | 5, 9, 2 of 10 |
-| GPT-5.6 Sol | 0.8 / 1.0 / 1.0 | 0.93 | 8, 10, 10 of 10 |
-
-All 9 trials passed every regression case.
-
-**Earlier versions** (same harness for GPT-5.6 Sol; Claude agents ran on the host with a clean
-copy of the repository and were scored the same way):
-
-| Version | Agent | Rewards | Notes |
-|---|---|---|---|
-| v1 (small tables, `ROWS`/`RANGE`) | Claude Sonnet | 1.0 | ~4 min; naive quadratic frames |
-| v1 | stronger Claude model | 1.0 | ~33 min |
-| v2 (+ scale, `GROUPS`, `EXCLUDE`; 6 groups) | Claude Sonnet | 1.0 | ~9 min; wrote a brute-force reference and cross-checked ~5,800 queries |
-| v2 | GPT-5.6 Sol, 3 trials | 0.17 / 1.0 / 0.17 | trials 1 and 3: `DESC` by negating keys crashes on strings/NULLs, failing 5 of 6 groups at 93-94% case accuracy |
-| v3 (10 groups, + subqueries) | GPT-5.6 Sol, 3 trials | 0.4 / 1.0 / 0.4 | `MIN`/`MAX` over strings crashed in 6 groups (string aggregates were in every group) |
-| v3 solutions re-scored on v3.1 | GPT-5.6 Sol | 0.9 / 1.0 / 0.8 | failures now land only in `types_nulls` and `range_frames` |
-
-**Assessment.** The reward tracks model capability (Luna 0.17, Terra 0.53, Sol 0.93). The task
-gives the strongest learning signal to mid-tier models (Terra: 0.2 to 0.9 across trials) and is
-of medium difficulty for the strongest model tested (Sol solves it completely in 2 of 3 trials);
-partial solutions earn graded credit that names what is missing. Its ceiling is limited by the fact that the instruction is
-necessarily a complete, precise specification: strong agents can write their own
-brute-force reference and test against it, which is how the successful runs worked.
+**Assessment.** The reward tracks model capability (Luna 0.17, Terra 0.53, Sol 0.93). Mid-tier
+models get the widest spread (Terra: 0.2 to 0.9 across trials), the regime with the most RL
+signal; the strongest model tested solves the task completely in 2 of 3 trials, and partial
+solutions earn graded credit that names what is missing.
 
 ## Solution explanation
 
@@ -171,6 +151,7 @@ any regression failure gives 0. One-defect variants of the oracle (v3.1 verifier
 | optimizer fix missing | 9/10 | 0.9 |
 | windows correct but `LEFT JOIN` broken | 8/10, regression fails | 0.0 |
 | oracle plus scratch files `random.py`, `json.py`, `re.py`, ... in `/app` | 10/10 | 1.0 |
+| oracle with every file saved as mode 0600 / directories 0700 | 10/10 | 1.0 |
 
 An in-group threshold (half credit for a group with at least 90% of its cases correct) was
 evaluated on 19 saved solutions and not adopted: it changed only one of nine agent rewards
@@ -178,14 +159,21 @@ evaluated on 19 saved solutions and not adopted: it changed only one of nine age
 that bundles several features can stay above 90% while one feature is missing entirely.
 
 **Isolation.** `/app` is treated as hostile. `test.sh` only starts `verify.py` with the reference
-interpreter (`/opt/ref/bin/python -I`, cwd `/tests`), which never imports from `/app`. It checks
-that `/app/sqlglot` is a real directory inside `/app` and clears setuid/setgid bits. The code
-under test runs in a child process started with `setpriv` as `nobody` with `no_new_privs`, no
-capabilities and a clean environment; `/tests`, `/opt/ref` (DuckDB) and `/logs` are `0700 root`;
-`/app` is appended to the child's `sys.path`, so stray files cannot shadow the standard library.
-The child gets queries and data only and answers over a pipe (stdout redirected, nonce-tagged
-lines, plain JSON values only). DuckDB results are computed after the child exits; the reward is
-written last, by root.
+interpreter (`/opt/ref/bin/python -I`, cwd `/tests`), which never imports from `/app`. Before
+running anything it checks that `/app/sqlglot` is a real directory inside `/app`, rejects
+compiled native files (ELF) under `/app`, clears setuid/setgid bits, and makes `/app` readable
+(so files saved with restrictive modes still work). The code under test runs in a child process
+started with `setpriv` as `nobody` with `no_new_privs`, no capabilities and a clean environment,
+under a Python audit hook installed before any code from `/app` runs: importing `sqlite3`,
+`ctypes`, `duckdb` or `cffi`, loading libraries and starting processes are refused, so the engine
+has to be implemented rather than delegated (the instruction states this). `/tests`, `/opt/ref`
+(DuckDB) and `/logs` are `0700 root`; `/app` is appended to the child's `sys.path`, so stray files
+cannot shadow the standard library. Time limits are enforced by the root parent: if a case does
+not answer within its limit (plus a 5 s grace) or the child dies, that case fails and a fresh
+child continues with the remaining cases. Regression cases run first. The child receives queries
+and data only and answers over a pipe (stdout redirected, nonce-tagged lines, plain JSON values
+only, accepted only in case order). DuckDB results are computed after the child exits; the reward
+is written last, by root.
 
 **Hacks tried** (each built as a "solution" and run through the full lifecycle on v3.1; all
 scored 0, with the blocking error in the verifier log):
@@ -200,6 +188,11 @@ scored 0, with the blocking error in the verifier log):
 | steal the nonce and forge result lines on every fd | forged rows are wrong without the answers |
 | row objects whose `__eq__` is always true | rejected, plain values only |
 | kill the verifier / PID 1, read `/tests` | `Operation not permitted` / `Permission denied` |
+| delegate every query to the standard-library `sqlite3` (via `sqlglot.transpile`) | `ImportError` from the audit hook |
+| copy the compiled `_sqlite3` extension into `/app` | rejected before running (native code under `/app`) |
+
+A timing attack (oracle that disables the in-process alarm and takes 40 s per large-table query)
+loses exactly the scale group (0.9): the parent's per-case limit still applies.
 
 **Known holes.**
 
@@ -207,18 +200,18 @@ scored 0, with the blocking error in the verifier log):
   time; memorisation across episodes is possible in principle.
 - Features outside the templates (`FILTER`, `DISTINCT` inside window aggregates) are neither
   required nor checked.
-- The subquery group discriminates only sometimes: all three v3 Sol solutions passed it (two
-  without touching the optimizer, since the optimizer's added `GROUP BY id` groups by a unique
-  key and lenient implementations still compute the right answer), and one of three v3.1
-  solutions failed it on the scalar-subquery-next-to-a-window-aggregate shape.
-- Isolation relies on Linux permissions inside the container.
-- Denial of service (fork bombs, memory) only fails the agent's own trial.
+- Optimizer-dependent cases form one group (0.1 of the reward), and lenient implementations can
+  pass some of them without changing the optimizer.
+- Isolation relies on Linux permissions and a Python audit hook inside the container.
 
-## Iterations
+## Design evolution
 
-| Version | Change | Why |
+| Version | Added | Motivation |
 |---|---|---|
-| v1 | small tables, `ROWS`/`RANGE`, 5 groups | first version |
-| v2 | + 50,000-row scale group, `GROUPS`, `EXCLUDE`; O(n log n) oracle | v1 solved by Claude Sonnet in ~4 min |
-| v3 | 10 groups, + subqueries (optimizer fix in the oracle), round-robin templates | coverage audit found requirements tested only 1-2 times; one sort bug zeroed 5 of 6 groups |
-| v3.1 | string aggregates moved into `types_nulls`; numeric aggregates elsewhere; 30-60 cases per group | a string `MIN`/`MAX` bug still zeroed 6 of 10 groups |
+| v1 | windows on small tables, `ROWS`/`RANGE` frames | first complete version |
+| v2 | 50,000-row scale group, `GROUPS`, `EXCLUDE`; O(n log n) oracle | require efficient algorithms, not only semantics |
+| v3 | 10 independent capability groups; subquery group with the optimizer fix; round-robin templates | one bug should cost one group; even coverage |
+| v3.1 | cross-cutting concerns (types, NULLs, string aggregates) concentrated in `types_nulls` | failures land in the group of their root cause |
+| final | audit-hook sandbox, parent-enforced time limits, readable `/app`, regression first | hack-resistance and fairness hardening |
+
+Logs and scripts behind every number in this README are in `../evidence/`.

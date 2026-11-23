@@ -13,11 +13,13 @@ import json
 import math
 import os
 import secrets
+import selectors
 import shutil
 import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -84,7 +86,69 @@ def strip_setid_bits(root: str) -> None:
 # ---------------------------------------------------------------------- execution
 
 
+def make_app_readable(root: str) -> None:
+    """The code under test runs as `nobody`; make /app readable regardless of how it was saved."""
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        for name in [None] + dirnames + filenames:
+            path = dirpath if name is None else os.path.join(dirpath, name)
+            try:
+                st = os.lstat(path)
+            except OSError:
+                continue
+            if stat.S_ISLNK(st.st_mode):
+                continue
+            extra = stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH
+            if stat.S_ISDIR(st.st_mode) or st.st_mode & stat.S_IXUSR:
+                extra |= stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+            if st.st_mode & extra != extra:
+                os.chmod(path, stat.S_IMODE(st.st_mode) | extra)
+
+
+def native_code_files(root: str) -> list[str]:
+    """Compiled native code under /app (e.g. a copied _sqlite3 extension) is not allowed."""
+    found = []
+    for dirpath, _, filenames in os.walk(root, followlinks=False):
+        for name in filenames:
+            path = os.path.join(dirpath, name)
+            try:
+                if os.path.islink(path) or not os.path.isfile(path):
+                    continue
+                with open(path, "rb") as f:
+                    if f.read(4) == b"\x7fELF":
+                        found.append(path)
+            except OSError:
+                continue
+    return found
+
+
+IMPORT_SECONDS = 60
+GRACE_SECONDS = 5
+
+
 def run_child(datasets, cases) -> tuple[dict, str | None, str]:
+    """Runs the cases in a sandboxed child. Time limits are enforced here, in the parent: if a
+    case does not answer in time (or the child dies), that case fails and a fresh child
+    continues with the remaining cases."""
+    results: dict[int, dict] = {}
+    stderr_tail = ""
+    deadline = time.time() + CHILD_TIMEOUT
+    pending = list(cases)
+    while pending and time.time() < deadline:
+        batch, stuck_id, err, bad_file = _run_batch(datasets, pending, deadline)
+        stderr_tail = (stderr_tail + err)[-4000:]
+        if bad_file:
+            return {}, f"sqlglot was not imported from /app ({bad_file})", stderr_tail
+        results.update(batch)
+        if stuck_id is not None:
+            results[stuck_id] = {"id": stuck_id, "error": "no answer within the case's time limit"}
+        pending = [c for c in pending if c["id"] not in results]
+    problem = None
+    if pending:
+        problem = f"total budget of {CHILD_TIMEOUT}s exhausted; {len(pending)} cases fail"
+    return results, problem, stderr_tail
+
+
+def _run_batch(datasets, cases, deadline):
     nonce = secrets.token_hex(16)
     workdir = tempfile.mkdtemp(prefix="wf-runner-")
     os.chmod(workdir, 0o755)
@@ -117,38 +181,73 @@ def run_child(datasets, cases) -> tuple[dict, str | None, str]:
         cwd=workdir,
         env=env,
     )
-    try:
-        out, err = proc.communicate(request.encode(), timeout=CHILD_TIMEOUT)
-        problem = None
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        out, err = proc.communicate()
-        problem = f"code under test exceeded {CHILD_TIMEOUT}s; unfinished cases fail"
+
+    def feed():
+        try:
+            proc.stdin.write(request.encode())
+            proc.stdin.close()
+        except OSError:
+            pass
+
+    threading.Thread(target=feed, daemon=True).start()
 
     results: dict[int, dict] = {}
-    sqlglot_file = None
-    prefix = nonce + " "
-    for line in out.decode("utf-8", "replace").splitlines():
-        if not line.startswith(prefix):
-            continue
-        try:
-            record = json.loads(line[len(prefix) :])
-        except ValueError:
-            continue
-        if not isinstance(record, dict):
-            continue
-        if "sqlglot_file" in record:
-            sqlglot_file = record["sqlglot_file"]
-            continue
-        cid = record.get("id")
-        if isinstance(cid, int) and cid not in results:
-            results[cid] = record
+    prefix = nonce.encode() + b" "
+    sel = selectors.DefaultSelector()
+    sel.register(proc.stdout, selectors.EVENT_READ, "out")
+    sel.register(proc.stderr, selectors.EVENT_READ, "err")
+    out_buf, err_buf = b"", b""
+    index, imported, bad_file, stuck_id = 0, False, None, None
+    case_deadline = time.time() + IMPORT_SECONDS
+    open_streams = 2
 
+    while open_streams and index < len(cases):
+        wait = min(case_deadline, deadline) - time.time()
+        if wait <= 0:
+            stuck_id = cases[index]["id"]
+            break
+        for key, _ in sel.select(timeout=wait):
+            chunk = os.read(key.fileobj.fileno(), 65536)
+            if not chunk:
+                sel.unregister(key.fileobj)
+                open_streams -= 1
+                continue
+            if key.data == "err":
+                err_buf = (err_buf + chunk)[-8000:]
+                continue
+            out_buf += chunk
+            while b"\n" in out_buf and index < len(cases):
+                line, out_buf = out_buf.split(b"\n", 1)
+                if not line.startswith(prefix):
+                    continue
+                try:
+                    record = json.loads(line[len(prefix):])
+                except ValueError:
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                if "sqlglot_file" in record and not imported:
+                    imported = True
+                    f = record["sqlglot_file"]
+                    if f is not None and not str(f).startswith("/app/"):
+                        bad_file = str(f)
+                elif record.get("id") == cases[index]["id"]:  # answers arrive in order
+                    results[record["id"]] = record
+                    index += 1
+                else:
+                    continue
+                if index < len(cases):
+                    case_deadline = time.time() + cases[index].get("timeout", 10) + GRACE_SECONDS
+        if bad_file:
+            break
+
+    if stuck_id is None and index < len(cases) and not bad_file:
+        stuck_id = cases[index]["id"]  # the child exited without answering this case
+    proc.kill()
+    proc.wait()
+    sel.close()
     shutil.rmtree(workdir, ignore_errors=True)
-    if sqlglot_file is not None and not str(sqlglot_file).startswith("/app/"):
-        problem = f"sqlglot was not imported from /app ({sqlglot_file})"
-        results = {}
-    return results, problem, err.decode("utf-8", "replace")[-4000:]
+    return results, stuck_id, err_buf.decode("utf-8", "replace"), bad_file
 
 
 def reference_results(datasets, cases) -> dict[int, list]:
@@ -226,12 +325,22 @@ def main() -> None:
         write_reward(0.0, details)
         return
 
+    native = native_code_files("/app")
+    if native:
+        details["error"] = f"native code is not allowed under /app: {native[:5]}"
+        log(details["error"])
+        write_reward(0.0, details)
+        return
+
     strip_setid_bits("/app")
+    make_app_readable("/app")
     generated = querygen.generate()
     datasets, cases = generated["datasets"], generated["cases"]
     log(f"{len(cases)} cases over {len(datasets)} datasets")
 
-    results, child_problem, child_stderr = run_child(datasets, cases)
+    # regression cases first, so a slow solution cannot lose them to the total time budget
+    ordered = [c for c in cases if c["tier"] == "regression"] + [c for c in cases if c["tier"] != "regression"]
+    results, child_problem, child_stderr = run_child(datasets, ordered)
     if child_problem:
         details["child_problem"] = child_problem
         log(child_problem)

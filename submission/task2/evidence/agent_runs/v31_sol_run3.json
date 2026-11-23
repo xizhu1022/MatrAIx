@@ -1,0 +1,11 @@
+{
+ "model": "openai/gpt-5.6-sol",
+ "run": "v31_sol_run3",
+ "reward": 1.0,
+ "stop_reason": "finished",
+ "turns": 43,
+ "cost_usd": 1.51,
+ "minutes": 5.0,
+ "summary": "Implemented comprehensive Python executor window-function support. Added planner window stages, named-window resolution, grouped aggregate extraction, QUALIFY handling, and correct ordering relative to WHERE/GROUP BY/HAVING/DISTINCT/ORDER BY/LIMIT. Added efficient partitioned evaluation for ranking, aggregate, navigation, ROWS/RANGE/GROUPS frames, exclusions, peer semantics, NULL handling, and IGNORE NULLS. Preserved window-bearing subqueries from unsafe optimizer unnesting and supported correlated/scalar/quantified subqueries. Also fixed set-operation branch context collisions. Validated frame/ranking/navigation behavior against SQLite where supported, exercised grouped/join/subquery/named-window composition, compiled the package, and benchmarked representative 50,000-row cases at roughly 0.8\u20131.0 seconds each.",
+ "verifier_log": "372 cases over 6 datasets\ntier types_nulls    30/30   PASS\ntier ranking        30/30   PASS\ntier aggregates     30/30   PASS\ntier rows_frames    30/30   PASS\ntier range_frames   30/30   PASS\ntier groups_exclude   30/30   PASS\ntier navigation     30/30   PASS\ntier composition    60/60   PASS\ntier subqueries     30/30   PASS\ntier scale          12/12   PASS\nregression          60/60   PASS\nreward = 1\n"
+}

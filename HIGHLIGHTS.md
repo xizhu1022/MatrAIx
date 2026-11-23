@@ -20,7 +20,8 @@ query engine: a real capability gap that spans the planner, the executor and the
 4. **Cross-module difficulty.** Some subquery shapes fail in sqlglot's optimizer before the
    new code runs, so the agent has to trace a wrong result back through another module.
 5. **A hardened, self-tested verifier.** The agent's code runs as an unprivileged user and
-   the verifier never imports it; 8 attack strategies all scored 0. One-defect reference
+   the verifier never imports it; an audit hook blocks delegating queries to another engine, and
+   time limits are enforced outside the agent's process. 10 attack strategies all scored 0. One-defect reference
    solutions score in steps from 0.3 to 0.9, and a coverage audit confirms every requirement
    is tested at least 3 times.
 
