@@ -62,6 +62,11 @@ partial credit, difficulty measured with agents). The reviewer details are in it
   sometimes: all v3 runs passed it, one of three v3.1 runs failed it.
 - The comparison with a peer's task (13 groups, rewards 0.77-0.92) is what made the
   group-independence problem visible.
+- **Model ladder on v3.1** (same harness, 3 trials each): GPT-5.6 Luna 0.3 / 0.1 / 0.1 (mean
+  0.17), Terra 0.5 / 0.9 / 0.2 (0.53), Sol 0.8 / 1.0 / 1.0 (0.93). The reward tracks capability,
+  regression cases passed in all 9 trials, and the mid-tier model gets the widest spread.
+- An in-group threshold (half credit at >=90% of a group) was tested on 19 saved solutions and
+  not adopted: it rewarded a solution with no `QUALIFY` support (0.7 -> 0.8).
 - **Fairness fixes found by testing:** (1) a `UNION ALL` regression query failed because of an
   existing executor bug unrelated to windows; I replaced it so agents are not blamed for
   pre-existing bugs. (2) The child process originally put `/app` first on `sys.path`, so an

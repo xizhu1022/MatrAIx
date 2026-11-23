@@ -69,6 +69,16 @@ next to a window aggregate (`SELECT id, (SELECT MAX(w) FROM u), COUNT(*) OVER (.
 optimizer's `unnest_subqueries` treats the window aggregate as a plain aggregate and wraps the
 hoisted scalar in `MAX(...)`. Regression cases passed in every trial.
 
+**Smaller models of the same family (same harness, same version, 3 trials each).**
+
+| Model | Trial rewards | Mean | Groups passed per trial |
+|---|---|---|---|
+| GPT-5.6 Luna | 0.3 / 0.1 / 0.1 | 0.17 | 3, 1, 1 of 10 |
+| GPT-5.6 Terra | 0.5 / 0.9 / 0.2 | 0.53 | 5, 9, 2 of 10 |
+| GPT-5.6 Sol | 0.8 / 1.0 / 1.0 | 0.93 | 8, 10, 10 of 10 |
+
+All 9 trials passed every regression case.
+
 **Earlier versions** (same harness for GPT-5.6 Sol; Claude agents ran on the host with a clean
 copy of the repository and were scored the same way):
 
@@ -81,9 +91,10 @@ copy of the repository and were scored the same way):
 | v3 (10 groups, + subqueries) | GPT-5.6 Sol, 3 trials | 0.4 / 1.0 / 0.4 | `MIN`/`MAX` over strings crashed in 6 groups (string aggregates were in every group) |
 | v3 solutions re-scored on v3.1 | GPT-5.6 Sol | 0.9 / 1.0 / 0.8 | failures now land only in `types_nulls` and `range_frames` |
 
-**Assessment.** On the final version GPT-5.6 Sol averages 0.93 and solves it completely in 2 of
-3 trials (4 of 9 trials across v2 to v3.1), so the task is of medium difficulty for frontier
-agents; partial solutions earn graded credit that names what is missing. Its ceiling is limited by the fact that the instruction is
+**Assessment.** The reward tracks model capability (Luna 0.17, Terra 0.53, Sol 0.93). The task
+gives the strongest learning signal to mid-tier models (Terra: 0.2 to 0.9 across trials) and is
+of medium difficulty for the strongest model tested (Sol solves it completely in 2 of 3 trials);
+partial solutions earn graded credit that names what is missing. Its ceiling is limited by the fact that the instruction is
 necessarily a complete, precise specification: strong agents can write their own
 brute-force reference and test against it, which is how the successful runs worked.
 
@@ -160,6 +171,11 @@ any regression failure gives 0. One-defect variants of the oracle (v3.1 verifier
 | optimizer fix missing | 9/10 | 0.9 |
 | windows correct but `LEFT JOIN` broken | 8/10, regression fails | 0.0 |
 | oracle plus scratch files `random.py`, `json.py`, `re.py`, ... in `/app` | 10/10 | 1.0 |
+
+An in-group threshold (half credit for a group with at least 90% of its cases correct) was
+evaluated on 19 saved solutions and not adopted: it changed only one of nine agent rewards
+(0.80 to 0.85) but raised a solution with no `QUALIFY` support from 0.7 to 0.8, because a group
+that bundles several features can stay above 90% while one feature is missing entirely.
 
 **Isolation.** `/app` is treated as hostile. `test.sh` only starts `verify.py` with the reference
 interpreter (`/opt/ref/bin/python -I`, cwd `/tests`), which never imports from `/app`. It checks

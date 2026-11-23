@@ -161,6 +161,9 @@ audit confirms every requirement is exercised at least 3 times.
 
 - A group counts only if **every** case in it is correct; reward = complete groups / 10.
 - Any regression failure makes the reward 0, so breaking the engine is not rewarded.
+- An in-group threshold (half credit at ≥90% of a group's cases) was tested on 19 saved
+  solutions and not adopted: it rewarded a solution with no `QUALIFY` support (0.7 → 0.8) while
+  changing only one of nine agent rewards.
 
 **Isolation.**
 
@@ -202,8 +205,37 @@ audit confirms every requirement is exercised at least 3 times.
 
 ## 7. Evaluation results
 
-**3 trials finished, 2 with full marks, mean 0.93. GPT-5.6 Sol on the final version (v3.1),
-run in the real offline task container:**
+**Three models of the same family on the final version (v3.1)**, each run 3 times in the real
+offline task container with the same agent harness:
+
+| Model | Rewards | Mean | Full marks |
+|---|---|---|---|
+| GPT-5.6 Luna (small) | 0.3 / 0.1 / 0.1 | 0.17 | 0/3 |
+| GPT-5.6 Terra (medium) | 0.5 / 0.9 / 0.2 | 0.53 | 0/3 |
+| GPT-5.6 Sol (large) | 0.8 / 1.0 / 1.0 | 0.93 | 2/3 |
+
+The reward rises with model capability, and every one of the 9 trials passed all 60 regression
+cases, so the lost reward always comes from capabilities that were not finished. Terra shows the
+widest spread (0.2 to 0.9), the regime with the most learning signal for RL; Sol is the ceiling of
+this task.
+
+**GPT-5.6 Luna: 3 trials finished, no full marks, mean 0.17.**
+
+| Trial | Reward | Groups passed | Groups failed |
+|---|---|---|---|
+| 1 | 0.3 | 3/10 | types_nulls, ranking, rows_frames, navigation, composition, subqueries, scale |
+| 2 | 0.1 | 1/10 | all except aggregates |
+| 3 | 0.1 | 1/10 | all except aggregates |
+
+**GPT-5.6 Terra: 3 trials finished, no full marks, mean 0.53.**
+
+| Trial | Reward | Groups passed | Groups failed |
+|---|---|---|---|
+| 1 | 0.5 | 5/10 | types_nulls, groups_exclude, composition, subqueries, scale |
+| 2 | 0.9 | 9/10 | composition |
+| 3 | 0.2 | 2/10 | types_nulls, rows_frames, range_frames, groups_exclude, navigation, composition, subqueries, scale |
+
+**GPT-5.6 Sol: 3 trials finished, 2 with full marks, mean 0.93.**
 
 | Trial | Reward | Groups passed | Groups failed |
 |---|---|---|---|
