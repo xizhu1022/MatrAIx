@@ -104,6 +104,17 @@ literal), which use the frame (`NULL` when the frame has no such row). All five 
 - window functions over `JOIN` / `LEFT JOIN` results, and inside subqueries and CTEs that an
   outer query then filters.
 
+**Subqueries.** Window functions must also work inside subqueries used as predicates or
+values, for example `WHERE id IN (SELECT id FROM t QUALIFY ROW_NUMBER() OVER (...) = 1)`,
+`NOT IN (... QUALIFY RANK() OVER (...) <= 2)`, `WHERE x IN (SELECT LAG(y) OVER (...) FROM t)`,
+`WHERE y IN (SELECT MAX(y) OVER (PARTITION BY g) FROM t)`, a correlated
+`EXISTS (SELECT 1 FROM u WHERE u.g = t.g QUALIFY ROW_NUMBER() OVER (...) = 1)`,
+`y > ALL (SELECT MAX(y) OVER (...) FROM t WHERE ...)`, a correlated scalar subquery over a
+derived table that computes a window function, and scalar subqueries (correlated or not) in a
+SELECT list that also contains window functions. Note that `execute()` runs sqlglot's
+optimizer (`sqlglot.optimizer.optimize`) on the query before planning it; you may change any
+code under `/app`.
+
 **Scale.** Window evaluation must be efficient: on the 50,000-row table, every case (a mix of
 running and whole-partition aggregates, `MIN`/`MAX` over unbounded `ROWS` frames, wide
 `RANGE` offsets, `GROUPS` frames with `EXCLUDE`, `FIRST_VALUE`/`LAST_VALUE`/`NTH_VALUE` and
@@ -114,8 +125,13 @@ too slow for this; a reference implementation takes about 2 seconds per case.
 
 ## Scoring
 
-Cases are grouped into six equally weighted groups: ranking functions, aggregates with
-default frames, explicit frames, navigation functions, composition, and scale. A group counts
+Cases are grouped into ten equally weighted groups: *types and NULLs* (ordering by several
+keys, `DESC`, `NULLS FIRST`/`NULLS LAST`, string and NULL-containing keys, and `MIN`/`MAX` over
+strings), *ranking* functions, *aggregates* with default frames, *ROWS frames*, *RANGE
+frames*, *GROUPS frames and EXCLUDE*, *navigation* functions (including `IGNORE NULLS`),
+*composition*, *subqueries*, and *scale*. Outside the types-and-NULLs group, window `ORDER BY`
+keys are the never-NULL integer columns `y`, `h` and `id`, and window aggregates are over
+numbers. A group counts
 only if **every** case in it is correct (and on time); the reward is the fraction of complete
 groups. Queries without window functions that work today (filters, `CASE`/`COALESCE`,
 grouping, joins, `DISTINCT`, subqueries, CTEs, `UNION ALL`, ordering with `LIMIT`) must keep

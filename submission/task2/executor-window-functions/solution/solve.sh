@@ -1,11 +1,14 @@
 #!/bin/bash
-# Reference solution: adds a Window step to the planner (sqlglot/planner.py) and teaches the
-# Python executor to evaluate it (sqlglot/executor/python.py). See README.md for the design.
+# Reference solution: adds a Window step to the planner (sqlglot/planner.py), teaches the Python
+# executor to evaluate it (sqlglot/executor/python.py), and stops the optimizer's IN-subquery
+# unnesting from grouping windowed subqueries (sqlglot/optimizer/unnest_subqueries.py).
+# See README.md for the design.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cp "$HERE/files/planner.py" /app/sqlglot/planner.py
 cp "$HERE/files/executor/python.py" /app/sqlglot/executor/python.py
+cp "$HERE/files/optimizer/unnest_subqueries.py" /app/sqlglot/optimizer/unnest_subqueries.py
 
 cd /app
 python - <<'PY'

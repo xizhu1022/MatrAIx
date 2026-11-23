@@ -42,13 +42,26 @@ partial credit, difficulty measured with agents). The reviewer details are in it
   instruction) that rejects the natural quadratic implementation, plus `GROUPS` frames and
   `EXCLUDE`. That required rewriting my own oracle to O(n log n). The v1 Sonnet solution scores
   0.5 on v2.
-- **v2 is still not hard for frontier agents.** A fresh Sonnet run solved v2 to 1.0 in about
-  9 minutes by writing its own brute-force reference from the (necessarily precise)
-  instruction and cross-checking thousands of random queries. I decided to freeze the task
-  here and document this honestly rather than add difficulty through vaguer requirements.
-  While probing for a harder axis I found a real optimizer bug (`unnest_subqueries` adds a
-  `GROUP BY` to a windowed `IN` subquery, changing its meaning) that both my oracle and the
-  agent miss; requiring windowed subqueries would be the first step of a v3.
+- **v2 was solved by Sonnet again** (1.0 in about 9 minutes, by writing its own brute-force
+  reference from the necessarily precise instruction). GPT-5.6 Sol, run in the real offline
+  container through a small agent harness, scored 0.17 / 1.0 / 0.17. The failures showed a
+  scoring problem rather than a difficulty one: one bug (`DESC` implemented by negating keys,
+  crashing on strings/NULLs) zeroed 5 of 6 groups at 93-94% case accuracy.
+- **v3: 10 independent capability groups and a subquery group.** Ordering and NULL handling got
+  their own group; other groups order by never-NULL integers. Windowed `IN` subqueries break in
+  the optimizer (`unnest_subqueries` adds a `GROUP BY` to the subquery), so the oracle fixes
+  `unnest_subqueries`. A coverage audit (`tests/coverage.py`) had shown several requirements
+  tested only 1-2 times; templates are now used round-robin. GPT-5.6 Sol: 0.4 / 1.0 / 0.4, with a
+  string `MIN`/`MAX` bug zeroing 6 groups, because string aggregates appeared in every group.
+- **v3.1: string aggregates moved into the types-and-NULLs group**, numeric aggregates elsewhere,
+  30-60 cases per group, every requirement exercised at least 3 times. Re-scoring the saved v3 Sol
+  solutions gives 0.9 / 1.0 / 0.8, with failures landing only in the groups of their root cause.
+  Fresh GPT-5.6 Sol runs on v3.1: 0.8 / 1.0 / 1.0 (mean 0.93). The failing run lost
+  `types_nulls` (`DESC` by negation again) and `subqueries` (a scalar subquery next to a window
+  aggregate, broken by the optimizer). The subquery group therefore discriminates only
+  sometimes: all v3 runs passed it, one of three v3.1 runs failed it.
+- The comparison with a peer's task (13 groups, rewards 0.77-0.92) is what made the
+  group-independence problem visible.
 - **Fairness fixes found by testing:** (1) a `UNION ALL` regression query failed because of an
   existing executor bug unrelated to windows; I replaced it so agents are not blamed for
   pre-existing bugs. (2) The child process originally put `/app` first on `sys.path`, so an
@@ -61,8 +74,8 @@ partial credit, difficulty measured with agents). The reviewer details are in it
 
 ## With more time
 
-- v3 of this task: windowed `IN`/`EXISTS`/scalar subqueries (fix in the optimizer's
-  `unnest_subqueries`), and re-measure difficulty with several runs per model.
+- More trials per model (and other models) to estimate pass rates with tighter error bars.
+- A subquery or optimizer requirement that truly cannot pass without the cross-module fix.
 - A second task from the same verifier framework: `ROLLUP`/`CUBE`/`GROUPING SETS` with
   `GROUPING()`, plus aggregate `FILTER (WHERE ...)`.
 - The task generator: the probe above already lists a dozen executor gaps; each gap is a task
@@ -78,6 +91,7 @@ format, probe sqlglot and DuckDB behaviour, write the oracle, the verifier and t
 generator, build the Docker images, run selfcheck, write and run the attack and partial-credit
 variants, and draft this file and the task README. Difficulty was measured by giving the
 instruction to separate Claude agents (Claude Sonnet and a stronger Claude model) in a clean
-copy of the repository with no access to the tests or the solution, then scoring their final
-code through the real trial lifecycle. I reviewed the design decisions and results.
+copy of the repository with no access to the tests or the solution, and to GPT-5.6 Sol through
+OpenRouter with a small agent harness that runs the model inside the real offline task
+container; all final code was scored through the real trial lifecycle. I reviewed the design decisions and results.
 `REPORT.md` is written by me.

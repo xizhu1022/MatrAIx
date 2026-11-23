@@ -3,7 +3,7 @@ artifacts = ["/app/"]
 
 [task]
 name = "matraix-takehome/executor-window-functions"
-version = "1.0.0"
+version = "3.1.0"
 description = "Add SQL window functions (ranking, frame aggregates incl. RANGE/GROUPS/EXCLUDE, navigation, QUALIFY, named windows) to sqlglot's Python executor, efficient on 50k-row tables."
 authors = [{ name = "TODO-your-name", email = "TODO-your-email" }]
 
